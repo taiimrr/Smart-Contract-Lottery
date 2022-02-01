@@ -3,21 +3,20 @@ const ganache = require("ganache-cli");
 const Web3 = require("web3");
 const web3 = new Web3(ganache.provider());
 
-const { interface, bytecode } = require("../compile");
+const { abi, evm } = require("../compile");
 
-let accounts;
 let lottery;
+let accounts;
 
 beforeEach(async () => {
   accounts = await web3.eth.getAccounts();
 
-  lottery = await new web3.eth.Contract(JSON.parse(interface))
-    .deploy({ data: bytecode })
+  lottery = await new web3.eth.Contract(abi)
+    .deploy({ data: evm.bytecode.object })
     .send({ from: accounts[0], gas: "1000000" });
 });
-
 describe("Lottery Contract", () => {
-  it("deploys the contract", () => {
+  it("deploys a contract", () => {
     assert.ok(lottery.options.address);
   });
 
@@ -35,17 +34,15 @@ describe("Lottery Contract", () => {
     assert.equal(1, players.length);
   });
 
-  it("allows multiple account to enter", async () => {
+  it("allows multiple accounts to enter", async () => {
     await lottery.methods.enter().send({
       from: accounts[0],
       value: web3.utils.toWei("0.02", "ether"),
     });
-
     await lottery.methods.enter().send({
       from: accounts[1],
       value: web3.utils.toWei("0.02", "ether"),
     });
-
     await lottery.methods.enter().send({
       from: accounts[2],
       value: web3.utils.toWei("0.02", "ether"),
@@ -58,10 +55,10 @@ describe("Lottery Contract", () => {
     assert.equal(accounts[0], players[0]);
     assert.equal(accounts[1], players[1]);
     assert.equal(accounts[2], players[2]);
-
     assert.equal(3, players.length);
   });
-  it("requries a minimum amount of ether to enter", async () => {
+
+  it("requires a minimum amount of ether to enter", async () => {
     try {
       await lottery.methods.enter().send({
         from: accounts[0],
@@ -73,7 +70,7 @@ describe("Lottery Contract", () => {
     }
   });
 
-  it("only manager can pick winner", async () => {
+  it("only manager can call pickWinner", async () => {
     try {
       await lottery.methods.pickWinner().send({
         from: accounts[1],
@@ -84,22 +81,17 @@ describe("Lottery Contract", () => {
     }
   });
 
-  it("sends money to the winner and reset players", async () => {
+  it("sends money to the winner and resets the players array", async () => {
     await lottery.methods.enter().send({
       from: accounts[0],
       value: web3.utils.toWei("2", "ether"),
     });
 
-    const initialBal = await web3.eth.getBalance(accounts[0]);
-    await lottery.methods.pickWinner().send({
-      from: accounts[0],
-    });
-    const finalBal = await web3.eth.getBalance(accounts[0]);
+    const initialBalance = await web3.eth.getBalance(accounts[0]);
+    await lottery.methods.pickWinner().send({ from: accounts[0] });
+    const finalBalance = await web3.eth.getBalance(accounts[0]);
+    const difference = finalBalance - initialBalance;
 
-    const players = await lottery.methods.getPlayers().call({
-      from: accounts[0],
-    });
-    assert(finalBal > initialBal);
-    assert.equal(players.length, 0);
+    assert(difference > web3.utils.toWei("1.8", "ether"));
   });
 });
